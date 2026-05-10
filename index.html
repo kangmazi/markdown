@@ -341,7 +341,37 @@
       border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
     }
 
-    .math-inline { padding: .08em .35em; border-radius: 4px; }
+    .math-inline {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      padding: .08em .35em;
+      border-radius: 4px;
+      vertical-align: middle;
+      line-height: 1.45;
+    }
+
+    .math-inline.has-tall-math {
+      margin: .28em .12em;
+      padding: .22em .48em;
+      line-height: 2.05;
+      vertical-align: -.45em;
+    }
+
+    .math-inline.has-tall-math .katex {
+      line-height: 1.8;
+    }
+
+    .math-inline.has-tall-math .mfrac {
+      font-size: 1.04em;
+    }
+
+    .preview p:has(.math-inline.has-tall-math),
+    .preview li:has(.math-inline.has-tall-math),
+    .preview td:has(.math-inline.has-tall-math) {
+      line-height: 2.25;
+    }
+
     .math-block {
       display: block;
       padding: 14px 16px;
@@ -770,7 +800,9 @@ $$
         return `<sup><a href="#fn-${safeId}" id="ref-${safeId}">[${id}]</a></sup>`;
       });
       output = output.replace(/\$([^$\n]+)\$/g, (_, math) => {
-        return `<span class="math-inline" data-math="${escapeHtml(math.trim())}">${escapeHtml(math.trim())}</span>`;
+        const tex = math.trim();
+        const tallClass = /\\(?:frac|dfrac|tfrac|binom|sqrt)\b/.test(tex) ? " has-tall-math" : "";
+        return `<span class="math-inline${tallClass}" data-math="${escapeHtml(tex)}">${escapeHtml(tex)}</span>`;
       });
       output = output.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>");
       output = output.replace(/___([^_]+)___/g, "<strong><em>$1</em></strong>");
@@ -1014,6 +1046,24 @@ $$
       localStorage.setItem("markdown-live-active-id", activeArticleId);
     }
 
+    function normalizeDisplayMathInput() {
+      const value = editor.value;
+      const cursor = editor.selectionStart;
+      if (cursor !== editor.selectionEnd) return false;
+      const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
+      let lineEnd = value.indexOf("\n", cursor);
+      if (lineEnd === -1) lineEnd = value.length;
+      const line = value.slice(lineStart, lineEnd);
+      const match = line.match(/^(\s*)\$\$([^\n$][^\n]*?)\$\$(\s*)$/);
+      if (!match) return false;
+      const formatted = `${match[1]}$$\n${match[2].trim()}\n${match[1]}$$`;
+      if (line === formatted) return false;
+      editor.value = `${value.slice(0, lineStart)}${formatted}${value.slice(lineEnd)}`;
+      const nextCursor = lineStart + formatted.length;
+      editor.selectionStart = editor.selectionEnd = nextCursor;
+      return true;
+    }
+
     let saveTimer = 0;
     function scheduleSave() {
       window.clearTimeout(saveTimer);
@@ -1023,6 +1073,7 @@ $$
     }
 
     editor.addEventListener("input", () => {
+      normalizeDisplayMathInput();
       update();
       scheduleSave();
     });
