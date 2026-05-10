@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>实时 Markdown 渲染器</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #fff;
+      --panel-2: #eef3f8;
+      --text: #1d2430;
+      --muted: #667281;
+      --line: #dbe3ec;
+      --accent: #1f7a8c;
+      --accent-2: #d1495b;
+      --code-bg: #101820;
+      --code-text: #ecf2f8;
+      --shadow: 0 18px 50px rgba(30, 42, 58, .10);
+    }
+
+    [data-theme="paper"] {
+      --bg: #f6f4ee;
+      --panel: #fffdfa;
+      --panel-2: #eee9dc;
+      --text: #202124;
+      --muted: #6f675a;
+      --line: #ded6c4;
+      --accent: #0b7285;
+      --accent-2: #b23a48;
+      --code-bg: #25201b;
+      --code-text: #f6efe4;
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #111827;
+      --panel: #182235;
+      --panel-2: #223049;
+      --text: #e8edf6;
+      --muted: #aab5c6;
+      --line: #32415c;
+      --accent: #47c2b1;
+      --accent-2: #ff7a90;
+      --code-bg: #0c111b;
+      --code-text: #e8edf6;
+      --shadow: 0 18px 50px rgba(0, 0, 0, .28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, input, textarea, select { font: inherit; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+
+    .topbar, .articlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .actions, .article-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .auth-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .field, .select, .btn {
+      height: 38px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 6px;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, .03);
+    }
+
+    .field {
+      min-width: min(440px, 44vw);
+      padding: 0 12px;
+    }
+
+    .select { padding: 0 10px; min-width: 130px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 0 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color .18s ease, transform .18s ease, background .18s ease;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn.danger { color: var(--accent-2); }
+
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .pane {
+      min-height: calc(100vh - 166px);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .pane-head {
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-2);
+    }
+
+    .pane-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .stats {
+      display: flex;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    #editor {
+      width: 100%;
+      min-height: 100%;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: 22px;
+      background: transparent;
+      color: var(--text);
+      line-height: 1.75;
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: 15px;
+      tab-size: 2;
+    }
+
+    .preview-shell {
+      overflow: auto;
+      background: var(--panel);
+    }
+
+    .preview {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 26px 30px 70px;
+      line-height: 1.85;
+      overflow-wrap: anywhere;
+    }
+
+    .preview > *:first-child { margin-top: 0; }
+
+    .preview h1, .preview h2, .preview h3, .preview h4, .preview h5, .preview h6 {
+      line-height: 1.35;
+      margin: 1.8em 0 .75em;
+      font-weight: 800;
+    }
+
+    .preview h1 {
+      font-size: 30px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--accent);
+    }
+
+    .preview h2 {
+      font-size: 24px;
+      position: relative;
+      padding-left: 14px;
+    }
+
+    .preview h2::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: .22em;
+      width: 5px;
+      height: 1.05em;
+      border-radius: 4px;
+      background: var(--accent);
+    }
+
+    .preview h3 { font-size: 19px; color: var(--accent); }
+    .preview p, .preview ul, .preview ol, .preview blockquote, .preview table, .preview pre { margin: 1em 0; }
+    .preview a { color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    .preview strong { color: var(--accent-2); }
+    .preview del { color: var(--muted); }
+
+    .preview blockquote {
+      border-left: 4px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      padding: 12px 16px;
+      color: var(--muted);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .preview ul, .preview ol { padding-left: 1.5em; }
+    .preview li { margin: .35em 0; }
+    .preview input[type="checkbox"] { transform: translateY(1px); accent-color: var(--accent); }
+
+    .preview code {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      color: var(--accent-2);
+      padding: .15em .38em;
+      border-radius: 4px;
+      font-size: .9em;
+    }
+
+    .preview pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 8px;
+      padding: 16px;
+      overflow: auto;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    }
+
+    .preview pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+      font-size: 14px;
+    }
+
+    .preview .hl-keyword { color: #ff7b72; }
+    .preview .hl-fn { color: #d2a8ff; }
+    .preview .hl-string { color: #a5d6ff; }
+    .preview .hl-number { color: #79c0ff; }
+    .preview .hl-comment { color: #8b949e; font-style: italic; }
+
+    .preview table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .preview th, .preview td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+    }
+
+    .preview th { background: var(--panel-2); text-align: left; }
+    .preview img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }
+    .preview hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+
+    .math-inline, .math-block {
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+    }
+
+    .math-inline { padding: .08em .35em; border-radius: 4px; }
+    .math-block {
+      display: block;
+      padding: 14px 16px;
+      border-radius: 8px;
+      text-align: center;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .footnotes {
+      margin-top: 2.5em;
+      padding-top: 1em;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .92em;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      padding: 11px 14px;
+      border-radius: 6px;
+      background: var(--text);
+      color: var(--panel);
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+      z-index: 20;
+    }
+
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      place-items: center;
+      padding: 18px;
+      background: rgba(12, 18, 28, .48);
+    }
+
+    .modal.show { display: grid; }
+
+    .auth-box {
+      width: min(390px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .auth-box h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+    }
+
+    .auth-box label {
+      display: block;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .auth-box input {
+      width: 100%;
+      height: 40px;
+      margin-top: 6px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    .auth-tabs, .auth-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 960px) {
+      .topbar, .articlebar { align-items: flex-start; flex-direction: column; padding: 14px; }
+      .actions, .article-actions, .auth-area, .field, .select { width: 100%; }
+      .workspace { grid-template-columns: 1fr; padding: 12px; }
+      .pane { min-height: 58vh; }
+      .preview { padding: 22px 20px 52px; }
+    }
+  </style>
+</head>
+<body data-theme="default">
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>实时 Markdown 渲染器</h1>
+        <p>支持公式、代码高亮和本地多文章管理</p>
+      </div>
+      <div class="actions">
+        <select class="select" id="themeSelect" aria-label="选择主题">
+          <option value="default">清爽主题</option>
+          <option value="paper">纸张主题</option>
+          <option value="dark">夜间主题</option>
+        </select>
+        <button class="btn" id="insertSample" type="button">示例</button>
+        <button class="btn" id="clearEditor" type="button">清空</button>
+        <button class="btn primary" id="copyHtml" type="button">复制 HTML</button>
+        <div class="auth-area">
+          <span id="authStatus">未登录</span>
+          <button class="btn" id="openAuth" type="button">登录 / 注册</button>
+          <button class="btn" id="logoutBtn" type="button" hidden>退出</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="articlebar" aria-label="文章管理">
+      <input class="field" id="articleTitle" aria-label="文章标题" placeholder="文章标题">
+      <div class="article-actions">
+        <select class="select" id="articleSelect" aria-label="选择文章"></select>
+        <button class="btn primary" id="saveArticle" type="button">保存文章</button>
+        <button class="btn" id="newArticle" type="button">新增文章</button>
+        <button class="btn danger" id="deleteArticle" type="button">删除</button>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <section class="pane" aria-label="Markdown 编辑器">
+        <div class="pane-head">
+          <div class="pane-title"><span class="dot"></span>Markdown</div>
+          <div class="stats"><span id="lineCount">0 行</span><span id="charCount">0 字符</span></div>
+        </div>
+        <textarea id="editor" spellcheck="false" aria-label="Markdown 输入"></textarea>
+      </section>
+
+      <section class="pane" aria-label="实时预览">
+        <div class="pane-head">
+          <div class="pane-title"><span class="dot"></span>预览</div>
+          <div class="stats"><span id="wordCount">0 词</span></div>
+        </div>
+        <div class="preview-shell">
+          <article id="preview" class="preview"></article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">已保存</div>
+
+  <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <form class="auth-box" id="authForm">
+      <h2 id="authTitle">账号登录</h2>
+      <label for="username">用户名</label>
+      <input id="username" name="username" autocomplete="username" required minlength="2" maxlength="32">
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6">
+      <div class="auth-tabs">
+        <button class="btn primary" id="loginSubmit" type="submit">登录</button>
+        <button class="btn" id="registerSubmit" type="button">注册</button>
+        <button class="btn" id="closeAuth" type="button">取消</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+  <script>
+    const sample = `# MDNice 常用语法示例
+
+这是一段普通文本，支持 **加粗**、*斜体*、~~删除线~~、\`行内代码\`、[链接](https://www.mdnice.com) 和脚注引用[^note]。
+
+## 引用
+
+> Markdown 让作者专注内容，排版交给工具。
+
+## 列表
+
+- 无序列表
+- [x] 已完成任务
+- [ ] 待完成任务
+
+1. 有序列表第一项
+2. 有序列表第二项
+
+## 表格
+
+| 语法 | 写法 | 效果 |
+| --- | --- | --- |
+| 标题 | \`# 标题\` | 文章结构 |
+| 粗体 | \`**文字**\` | 强调重点 |
+| 公式 | \`$a+b$\` | 行内公式 |
+
+## 代码块
+
+\`\`\`js
+function renderMarkdown(text) {
+  const value = text.trim();
+  if (value.length > 0) {
+    return value;
+  }
+  return "empty";
+}
+\`\`\`
+
+## 公式
+
+行内公式：$E = mc^2$
+
+$$
+\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}
+$$
+
+## 图片
+
+![Markdown Nice](https://www.mdnice.com/favicon.ico)
+
+[^note]: 这里是脚注内容。`;
+
+    const storageKey = "markdown-live-articles-v2";
+    const editor = document.querySelector("#editor");
+    const preview = document.querySelector("#preview");
+    const themeSelect = document.querySelector("#themeSelect");
+    const articleTitle = document.querySelector("#articleTitle");
+    const articleSelect = document.querySelector("#articleSelect");
+    const lineCount = document.querySelector("#lineCount");
+    const charCount = document.querySelector("#charCount");
+    const wordCount = document.querySelector("#wordCount");
+    const toast = document.querySelector("#toast");
+    const authStatus = document.querySelector("#authStatus");
+    const authModal = document.querySelector("#authModal");
+    const authForm = document.querySelector("#authForm");
+    const usernameInput = document.querySelector("#username");
+    const passwordInput = document.querySelector("#password");
+    const openAuthBtn = document.querySelector("#openAuth");
+    const logoutBtn = document.querySelector("#logoutBtn");
+    let activeArticleId = "";
+    let currentUser = null;
+    let articleCache = [];
+
+    const escapeHtml = (value) => String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+    const unescapeAttr = (value) => String(value)
+      .replace(/&quot;/g, "\"")
+      .replace(/&#039;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+
+    const slugify = (text) => String(text)
+      .toLowerCase()
+      .replace(/<[^>]+>/g, "")
+      .replace(/[^\w\u4e00-\u9fa5]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "请求失败");
+      return data;
+    }
+
+    function getLocalArticles() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function setLocalArticles(articles) {
+      localStorage.setItem(storageKey, JSON.stringify(articles));
+    }
+
+    function makeArticle(title = "未命名文章", content = "") {
+      return {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        title,
+        content,
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      window.setTimeout(() => toast.classList.remove("show"), 1500);
+    }
+
+    function updateAuthUi() {
+      authStatus.textContent = currentUser ? `已登录：${currentUser.username}` : "未登录";
+      openAuthBtn.hidden = Boolean(currentUser);
+      logoutBtn.hidden = !currentUser;
+    }
+
+    async function loadServerArticles() {
+      articleCache = await api("/api/articles");
+      if (!articleCache.length) {
+        const first = await api("/api/articles", {
+          method: "POST",
+          body: JSON.stringify({ title: "MDNice 常用语法示例", content: sample })
+        });
+        articleCache = [first];
+      }
+    }
+
+    async function refreshAuth() {
+      try {
+        const data = await api("/api/me");
+        currentUser = data.user || null;
+        if (currentUser) {
+          await loadServerArticles();
+        } else {
+          articleCache = getLocalArticles();
+        }
+      } catch {
+        currentUser = null;
+        articleCache = getLocalArticles();
+      }
+      updateAuthUi();
+    }
+
+    function refreshArticleSelect() {
+      articleSelect.innerHTML = "";
+      articleCache.forEach((article) => {
+        const option = document.createElement("option");
+        option.value = article.id;
+        option.textContent = article.title || "未命名文章";
+        articleSelect.appendChild(option);
+      });
+      articleSelect.value = activeArticleId;
+      document.querySelector("#deleteArticle").disabled = articleCache.length <= 1;
+    }
+
+    async function saveCurrentArticle(silent = false) {
+      const index = articleCache.findIndex((article) => String(article.id) === String(activeArticleId));
+      const title = articleTitle.value.trim() || "未命名文章";
+      if (index >= 0) {
+        articleCache[index] = {
+          ...articleCache[index],
+          title,
+          content: editor.value,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        const article = makeArticle(title, editor.value);
+        activeArticleId = article.id;
+        articleCache.unshift(article);
+      }
+
+      if (currentUser) {
+        const active = articleCache.find((article) => String(article.id) === String(activeArticleId));
+        if (/^\d+$/.test(String(active.id))) {
+          await api(`/api/articles/${active.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ title: active.title, content: active.content })
+          });
+        } else {
+          const created = await api("/api/articles", {
+            method: "POST",
+            body: JSON.stringify({ title: active.title, content: active.content })
+          });
+          const createdIndex = articleCache.findIndex((article) => article.id === active.id);
+          articleCache[createdIndex] = created;
+          activeArticleId = created.id;
+        }
+      } else {
+        setLocalArticles(articleCache);
+      }
+      refreshArticleSelect();
+      if (!silent) showToast("文章已保存");
+    }
+
+    function loadArticle(id) {
+      const article = articleCache.find((item) => String(item.id) === String(id)) || articleCache[0];
+      if (!article) return;
+      activeArticleId = article.id;
+      articleTitle.value = article.title || "未命名文章";
+      editor.value = article.content || "";
+      refreshArticleSelect();
+      update();
+    }
+
+    async function ensureInitialArticle() {
+      await refreshAuth();
+      if (!articleCache.length) {
+        const first = makeArticle("MDNice 常用语法示例", sample);
+        articleCache = [first];
+        setLocalArticles(articleCache);
+      }
+      activeArticleId = localStorage.getItem("markdown-live-active-id") || articleCache[0].id;
+      if (!articleCache.some((article) => String(article.id) === String(activeArticleId))) activeArticleId = articleCache[0].id;
+      loadArticle(activeArticleId);
+    }
+
+    function parseInline(text) {
+      let output = escapeHtml(text);
+      const codeParts = [];
+
+      output = output.replace(/`([^`]+)`/g, (_, code) => {
+        const token = `@@CODE${codeParts.length}@@`;
+        codeParts.push(`<code>${code}</code>`);
+        return token;
+      });
+
+      output = output.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;([^&]+)&quot;)?\)/g, (_, alt, src, title) => {
+        const safeTitle = title ? ` title="${title}"` : "";
+        return `<img src="${src}" alt="${alt}"${safeTitle}>`;
+      });
+      output = output.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;([^&]+)&quot;)?\)/g, (_, label, href, title) => {
+        const safeTitle = title ? ` title="${title}"` : "";
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer"${safeTitle}>${label}</a>`;
+      });
+      output = output.replace(/\[\^([^\]]+)\]/g, (_, id) => {
+        const safeId = slugify(id) || id;
+        return `<sup><a href="#fn-${safeId}" id="ref-${safeId}">[${id}]</a></sup>`;
+      });
+      output = output.replace(/\$([^$\n]+)\$/g, (_, math) => {
+        return `<span class="math-inline" data-math="${escapeHtml(math.trim())}">${escapeHtml(math.trim())}</span>`;
+      });
+      output = output.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>");
+      output = output.replace(/___([^_]+)___/g, "<strong><em>$1</em></strong>");
+      output = output.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      output = output.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+      output = output.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+      output = output.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+      output = output.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+      codeParts.forEach((html, index) => {
+        output = output.replace(`@@CODE${index}@@`, html);
+      });
+      return output;
+    }
+
+    function isTableDivider(line) {
+      return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+    }
+
+    function splitTableLine(line) {
+      return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+    }
+
+    function closeList(state, html) {
+      if (state.list) {
+        html.push(`</${state.list}>`);
+        state.list = "";
+      }
+    }
+
+    function codeBlock(code, lang) {
+      const language = lang ? lang.toLowerCase() : "";
+      return `<pre><code class="language-${escapeHtml(language)}" data-lang="${escapeHtml(language)}">${escapeHtml(code)}</code></pre>`;
+    }
+
+    function renderBlocks(markdown) {
+      const footnotes = new Map();
+      const clean = markdown.replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, (_, id, content) => {
+        footnotes.set(id, content);
+        return "";
+      });
+      const lines = clean.replace(/\r\n?/g, "\n").split("\n");
+      const html = [];
+      const state = { list: "", inCode: false, codeLang: "", code: [] };
+
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (/^```/.test(trimmed)) {
+          if (state.inCode) {
+            html.push(codeBlock(state.code.join("\n"), state.codeLang));
+            state.inCode = false;
+            state.codeLang = "";
+            state.code = [];
+          } else {
+            closeList(state, html);
+            state.inCode = true;
+            state.codeLang = trimmed.replace(/^```/, "").trim();
+          }
+          continue;
+        }
+
+        if (state.inCode) {
+          state.code.push(line);
+          continue;
+        }
+
+        if (!trimmed) {
+          closeList(state, html);
+          continue;
+        }
+
+        if (trimmed === "---" || trimmed === "***" || trimmed === "___") {
+          closeList(state, html);
+          html.push("<hr>");
+          continue;
+        }
+
+        if (trimmed.startsWith("$$")) {
+          closeList(state, html);
+          const mathLines = [];
+          let math = trimmed.replace(/^\$\$/, "");
+          if (math.endsWith("$$") && math.length > 2) {
+            mathLines.push(math.replace(/\$\$$/, ""));
+          } else {
+            if (math) mathLines.push(math);
+            while (i + 1 < lines.length && !lines[i + 1].trim().endsWith("$$")) {
+              i += 1;
+              mathLines.push(lines[i]);
+            }
+            if (i + 1 < lines.length) {
+              i += 1;
+              mathLines.push(lines[i].trim().replace(/\$\$$/, ""));
+            }
+          }
+          const mathText = mathLines.join("\n").trim();
+          html.push(`<div class="math-block" data-math="${escapeHtml(mathText)}">${escapeHtml(mathText)}</div>`);
+          continue;
+        }
+
+        if (i + 1 < lines.length && isTableDivider(lines[i + 1])) {
+          closeList(state, html);
+          const headers = splitTableLine(line);
+          i += 1;
+          const rows = [];
+          while (i + 1 < lines.length && /\|/.test(lines[i + 1]) && lines[i + 1].trim()) {
+            i += 1;
+            rows.push(splitTableLine(lines[i]));
+          }
+          html.push("<table><thead><tr>");
+          headers.forEach((header) => html.push(`<th>${parseInline(header)}</th>`));
+          html.push("</tr></thead><tbody>");
+          rows.forEach((row) => {
+            html.push("<tr>");
+            headers.forEach((_, index) => html.push(`<td>${parseInline(row[index] || "")}</td>`));
+            html.push("</tr>");
+          });
+          html.push("</tbody></table>");
+          continue;
+        }
+
+        const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+        if (heading) {
+          closeList(state, html);
+          const level = heading[1].length;
+          const content = parseInline(heading[2]);
+          const id = slugify(heading[2]);
+          html.push(`<h${level}${id ? ` id="${id}"` : ""}>${content}</h${level}>`);
+          continue;
+        }
+
+        const quote = trimmed.match(/^>\s?(.*)$/);
+        if (quote) {
+          closeList(state, html);
+          const parts = [quote[1]];
+          while (i + 1 < lines.length && lines[i + 1].trim().startsWith(">")) {
+            i += 1;
+            parts.push(lines[i].trim().replace(/^>\s?/, ""));
+          }
+          html.push(`<blockquote><p>${parseInline(parts.join("<br>"))}</p></blockquote>`);
+          continue;
+        }
+
+        const unordered = trimmed.match(/^[-+*]\s+(.+)$/);
+        const ordered = trimmed.match(/^\d+\.\s+(.+)$/);
+        if (unordered || ordered) {
+          const tag = ordered ? "ol" : "ul";
+          if (state.list !== tag) {
+            closeList(state, html);
+            html.push(`<${tag}>`);
+            state.list = tag;
+          }
+          let content = unordered ? unordered[1] : ordered[1];
+          const task = content.match(/^\[(x|X| )\]\s+(.+)$/);
+          if (task) {
+            const checked = task[1].toLowerCase() === "x" ? " checked" : "";
+            content = `<input type="checkbox" disabled${checked}> ${parseInline(task[2])}`;
+          } else {
+            content = parseInline(content);
+          }
+          html.push(`<li>${content}</li>`);
+          continue;
+        }
+
+        closeList(state, html);
+        const paragraph = [line];
+        while (
+          i + 1 < lines.length &&
+          lines[i + 1].trim() &&
+          !/^(#{1,6})\s+/.test(lines[i + 1].trim()) &&
+          !/^```/.test(lines[i + 1].trim()) &&
+          !/^>\s?/.test(lines[i + 1].trim()) &&
+          !/^[-+*]\s+/.test(lines[i + 1].trim()) &&
+          !/^\d+\.\s+/.test(lines[i + 1].trim()) &&
+          !lines[i + 1].trim().startsWith("$$") &&
+          !(i + 2 < lines.length && isTableDivider(lines[i + 2]))
+        ) {
+          i += 1;
+          paragraph.push(lines[i]);
+        }
+        html.push(`<p>${parseInline(paragraph.join("<br>"))}</p>`);
+      }
+
+      closeList(state, html);
+      if (state.inCode) html.push(codeBlock(state.code.join("\n"), state.codeLang));
+
+      if (footnotes.size) {
+        html.push('<section class="footnotes"><ol>');
+        footnotes.forEach((content, id) => {
+          const safeId = slugify(id) || id;
+          html.push(`<li id="fn-${safeId}">${parseInline(content)} <a href="#ref-${safeId}">返回</a></li>`);
+        });
+        html.push("</ol></section>");
+      }
+      return html.join("\n");
+    }
+
+    function fallbackHighlight(codeElement) {
+      const lang = codeElement.dataset.lang || "";
+      if (!["js", "javascript", "ts", "typescript"].includes(lang)) return;
+      let html = codeElement.innerHTML;
+      html = html.replace(/(\/\/.*)$/gm, '<span class="hl-comment">$1</span>');
+      html = html.replace(/(&quot;.*?&quot;|&#039;.*?&#039;|`.*?`)/g, '<span class="hl-string">$1</span>');
+      html = html.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="hl-number">$1</span>');
+      html = html.replace(/\b(function|const|let|var|return|if|else|for|while|class|new|import|from|export|async|await)\b/g, '<span class="hl-keyword">$1</span>');
+      html = html.replace(/\b([a-zA-Z_$][\w$]*)(?=\s*\()/g, '<span class="hl-fn">$1</span>');
+      codeElement.innerHTML = html;
+    }
+
+    function enhancePreview() {
+      preview.querySelectorAll("code[data-lang]").forEach((block) => {
+        if (window.hljs) {
+          window.hljs.highlightElement(block);
+        } else {
+          fallbackHighlight(block);
+        }
+      });
+      preview.querySelectorAll("[data-math]").forEach((element) => {
+        const tex = unescapeAttr(element.dataset.math || "");
+        const displayMode = element.classList.contains("math-block");
+        if (window.katex) {
+          try {
+            window.katex.render(tex, element, { displayMode, throwOnError: false, strict: false });
+          } catch {
+            element.textContent = tex;
+          }
+        }
+      });
+    }
+
+    function update() {
+      const value = editor.value;
+      preview.innerHTML = renderBlocks(value);
+      enhancePreview();
+      const lines = value ? value.split(/\r\n?|\n/).length : 0;
+      const chars = value.length;
+      const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+      lineCount.textContent = `${lines} 行`;
+      charCount.textContent = `${chars} 字符`;
+      wordCount.textContent = `${words} 词`;
+      localStorage.setItem("markdown-live-active-id", activeArticleId);
+    }
+
+    let saveTimer = 0;
+    function scheduleSave() {
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(() => {
+        saveCurrentArticle(true).catch((error) => showToast(error.message));
+      }, 350);
+    }
+
+    editor.addEventListener("input", () => {
+      update();
+      scheduleSave();
+    });
+    articleTitle.addEventListener("input", scheduleSave);
+    articleSelect.addEventListener("change", () => loadArticle(articleSelect.value));
+    themeSelect.addEventListener("change", () => {
+      document.body.dataset.theme = themeSelect.value;
+      localStorage.setItem("markdown-live-theme", themeSelect.value);
+    });
+
+    document.querySelector("#saveArticle").addEventListener("click", () => {
+      saveCurrentArticle(false).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#newArticle").addEventListener("click", async () => {
+      await saveCurrentArticle(true).catch(() => {});
+      const article = makeArticle(`新文章 ${articleCache.length + 1}`, "");
+      articleCache = [article, ...articleCache];
+      if (!currentUser) setLocalArticles(articleCache);
+      loadArticle(article.id);
+      editor.focus();
+      showToast("已新增文章");
+    });
+    document.querySelector("#deleteArticle").addEventListener("click", async () => {
+      if (articleCache.length <= 1) {
+        showToast("至少保留一篇文章");
+        return;
+      }
+      if (currentUser && /^\d+$/.test(String(activeArticleId))) {
+        await api(`/api/articles/${activeArticleId}`, { method: "DELETE" }).catch((error) => showToast(error.message));
+      }
+      const next = articleCache.filter((article) => String(article.id) !== String(activeArticleId));
+      articleCache = next;
+      if (!currentUser) setLocalArticles(next);
+      loadArticle(next[0].id);
+      showToast("文章已删除");
+    });
+    document.querySelector("#insertSample").addEventListener("click", () => {
+      editor.value = sample;
+      articleTitle.value = "MDNice 常用语法示例";
+      saveCurrentArticle(true).catch((error) => showToast(error.message));
+      update();
+      showToast("已载入示例");
+    });
+    document.querySelector("#clearEditor").addEventListener("click", () => {
+      editor.value = "";
+      saveCurrentArticle(true).catch((error) => showToast(error.message));
+      update();
+      editor.focus();
+    });
+    document.querySelector("#copyHtml").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(preview.innerHTML);
+        showToast("HTML 已复制");
+      } catch {
+        showToast("复制失败，请手动选择");
+      }
+    });
+    editor.addEventListener("keydown", (event) => {
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        editor.value = `${editor.value.slice(0, start)}  ${editor.value.slice(end)}`;
+        editor.selectionStart = editor.selectionEnd = start + 2;
+        update();
+        scheduleSave();
+      }
+    });
+    openAuthBtn.addEventListener("click", () => {
+      authModal.classList.add("show");
+      usernameInput.focus();
+    });
+    document.querySelector("#closeAuth").addEventListener("click", () => authModal.classList.remove("show"));
+    authModal.addEventListener("click", (event) => {
+      if (event.target === authModal) authModal.classList.remove("show");
+    });
+    async function submitAuth(mode) {
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value;
+      if (!username || !password) {
+        showToast("请输入用户名和密码");
+        return;
+      }
+      try {
+        const data = await api(`/api/${mode}`, {
+          method: "POST",
+          body: JSON.stringify({ username, password })
+        });
+        currentUser = data.user;
+        authModal.classList.remove("show");
+        passwordInput.value = "";
+        await loadServerArticles();
+        activeArticleId = articleCache[0]?.id || "";
+        updateAuthUi();
+        loadArticle(activeArticleId);
+        showToast(mode === "register" ? "注册成功" : "登录成功");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+    authForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitAuth("login");
+    });
+    document.querySelector("#registerSubmit").addEventListener("click", () => submitAuth("register"));
+    logoutBtn.addEventListener("click", async () => {
+      await api("/api/logout", { method: "POST" }).catch(() => {});
+      currentUser = null;
+      articleCache = getLocalArticles();
+      activeArticleId = articleCache[0]?.id || "";
+      updateAuthUi();
+      loadArticle(activeArticleId);
+      showToast("已退出登录");
+    });
+
+    const savedTheme = localStorage.getItem("markdown-live-theme") || "default";
+    document.body.dataset.theme = savedTheme;
+    themeSelect.value = savedTheme;
+    ensureInitialArticle().catch((error) => showToast(error.message));
+  </script>
+</body>
+</html>
