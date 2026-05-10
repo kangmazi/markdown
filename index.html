@@ -463,6 +463,51 @@
       .pane { min-height: 58vh; }
       .preview { padding: 22px 20px 52px; }
     }
+
+    @media print {
+      body {
+        background: #fff;
+        color: #111;
+      }
+
+      .topbar,
+      .articlebar,
+      .pane:first-child,
+      .pane-head,
+      .toast,
+      .modal {
+        display: none !important;
+      }
+
+      .app,
+      .workspace,
+      .pane,
+      .preview-shell {
+        display: block;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        box-shadow: none;
+        overflow: visible;
+        background: #fff;
+      }
+
+      .preview {
+        max-width: none;
+        padding: 0;
+        color: #111;
+      }
+
+      .preview a {
+        color: #005f73;
+      }
+
+      .preview pre {
+        white-space: pre-wrap;
+        border: 1px solid #ddd;
+      }
+    }
   </style>
 </head>
 <body data-theme="default">
@@ -481,6 +526,8 @@
         <button class="btn" id="insertSample" type="button">示例</button>
         <button class="btn" id="clearEditor" type="button">清空</button>
         <button class="btn primary" id="copyHtml" type="button">复制 HTML</button>
+        <button class="btn" id="exportMarkdown" type="button">导出 Markdown</button>
+        <button class="btn" id="exportPdf" type="button">导出 PDF</button>
         <div class="auth-area">
           <span id="authStatus">未登录</span>
           <button class="btn" id="openAuth" type="button">登录 / 注册</button>
@@ -671,6 +718,28 @@ $$
       window.setTimeout(() => toast.classList.remove("show"), 1500);
     }
 
+    function safeFileName(name, extension) {
+      const fallback = "markdown-article";
+      const clean = String(name || fallback)
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "-")
+        .replace(/\s+/g, " ")
+        .slice(0, 80) || fallback;
+      return `${clean}.${extension}`;
+    }
+
+    function downloadTextFile(fileName, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
     function updateAuthUi() {
       authStatus.textContent = currentUser ? `已登录：${currentUser.username}` : "未登录";
       openAuthBtn.hidden = Boolean(currentUser);
@@ -780,6 +849,7 @@ $$
     function parseInline(text) {
       let output = escapeHtml(text);
       const codeParts = [];
+      const mathParts = [];
 
       output = output.replace(/`([^`]+)`/g, (_, code) => {
         const token = `@@CODE${codeParts.length}@@`;
@@ -802,7 +872,9 @@ $$
       output = output.replace(/\$([^$\n]+)\$/g, (_, math) => {
         const tex = math.trim();
         const tallClass = /\\(?:frac|dfrac|tfrac|binom|sqrt)\b/.test(tex) ? " has-tall-math" : "";
-        return `<span class="math-inline${tallClass}" data-math="${escapeHtml(tex)}">${escapeHtml(tex)}</span>`;
+        const token = `@@MATH${mathParts.length}@@`;
+        mathParts.push(`<span class="math-inline${tallClass}" data-math="${escapeHtml(tex)}">${escapeHtml(tex)}</span>`);
+        return token;
       });
       output = output.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>");
       output = output.replace(/___([^_]+)___/g, "<strong><em>$1</em></strong>");
@@ -813,6 +885,9 @@ $$
       output = output.replace(/~~([^~]+)~~/g, "<del>$1</del>");
       codeParts.forEach((html, index) => {
         output = output.replace(`@@CODE${index}@@`, html);
+      });
+      mathParts.forEach((html, index) => {
+        output = output.replace(`@@MATH${index}@@`, html);
       });
       return output;
     }
@@ -1170,6 +1245,18 @@ $$
       } catch {
         showToast("复制失败，请手动选择");
       }
+    });
+    document.querySelector("#exportMarkdown").addEventListener("click", () => {
+      const fileName = safeFileName(articleTitle.value, "md");
+      downloadTextFile(fileName, editor.value, "text/markdown;charset=utf-8");
+      showToast("Markdown 已导出");
+    });
+    document.querySelector("#exportPdf").addEventListener("click", () => {
+      document.title = safeFileName(articleTitle.value, "pdf").replace(/\.pdf$/, "");
+      window.print();
+      window.setTimeout(() => {
+        document.title = "实时 Markdown 渲染器";
+      }, 500);
     });
     editor.addEventListener("keydown", (event) => {
       if (event.key === "Tab") {
