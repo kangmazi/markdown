@@ -839,7 +839,8 @@ $$
 
     function renderBlocks(markdown) {
       const footnotes = new Map();
-      const clean = markdown.replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, (_, id, content) => {
+      const normalizedMarkdown = normalizeDisplayMathText(markdown);
+      const clean = normalizedMarkdown.replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, (_, id, content) => {
         footnotes.set(id, content);
         return "";
       });
@@ -1046,10 +1047,49 @@ $$
       localStorage.setItem("markdown-live-active-id", activeArticleId);
     }
 
+    function normalizeDisplayMathText(value) {
+      const normalizedLines = [];
+      value.split("\n").forEach((line) => {
+        if (!line.includes("$$") || line.trim() === "$$") {
+          normalizedLines.push(line);
+          return;
+        }
+
+        let cursor = 0;
+        let changed = false;
+        const inlineDisplayMath = /\$\$([^$\n]+?)\$\$/g;
+        let match = inlineDisplayMath.exec(line);
+        while (match) {
+          const before = line.slice(cursor, match.index).trimEnd();
+          if (before) normalizedLines.push(before);
+          normalizedLines.push("", "$$", match[1].trim(), "$$", "");
+          cursor = match.index + match[0].length;
+          changed = true;
+          match = inlineDisplayMath.exec(line);
+        }
+
+        if (changed) {
+          const after = line.slice(cursor).trimStart();
+          if (after) normalizedLines.push(after);
+        } else {
+          normalizedLines.push(line);
+        }
+      });
+      return normalizedLines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+    }
+
     function normalizeDisplayMathInput() {
       const value = editor.value;
       const cursor = editor.selectionStart;
       if (cursor !== editor.selectionEnd) return false;
+      const normalizedValue = normalizeDisplayMathText(value);
+      if (normalizedValue !== value) {
+        const lengthDelta = normalizedValue.length - value.length;
+        editor.value = normalizedValue;
+        const nextCursor = Math.max(0, cursor + lengthDelta);
+        editor.selectionStart = editor.selectionEnd = nextCursor;
+        return true;
+      }
       const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
       let lineEnd = value.indexOf("\n", cursor);
       if (lineEnd === -1) lineEnd = value.length;
